@@ -3,8 +3,6 @@ package com.ebikes.routing.support.context;
 import java.util.Collections;
 import java.util.Set;
 
-import com.ebikes.routing.constants.ApplicationConstants;
-
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -20,19 +18,9 @@ public final class ExecutionContext {
     context.remove();
   }
 
-  public static String getActiveBranch() {
-    ContextData data = context.get();
-    return data != null ? data.activeBranch() : null;
-  }
-
   public static String getActiveOrganization() {
     ContextData data = context.get();
     return data != null ? data.activeOrganization() : null;
-  }
-
-  public static Set<String> getRoles() {
-    ContextData data = context.get();
-    return data != null ? data.roles() : Collections.emptySet();
   }
 
   public static String getUserId() {
@@ -42,30 +30,6 @@ public final class ExecutionContext {
           "getUserId() called with no execution context on current thread");
     }
     return data.userId();
-  }
-
-  public static boolean hasContext() {
-    return context.get() != null;
-  }
-
-  public static ContextData snapshot() {
-    return context.get();
-  }
-
-  public static void restore(ContextData snapshot) {
-    if (snapshot != null) {
-      context.set(snapshot);
-    }
-  }
-
-  public static void setSystem() {
-    context.set(
-        new ContextData(
-            null,
-            null,
-            Collections.emptySet(),
-            Collections.emptySet(),
-            ApplicationConstants.SYSTEM_ID));
   }
 
   public static void set(
