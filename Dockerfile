@@ -1,9 +1,4 @@
-# build arguments for dynamic metadata
-ARG VERSION=latest
-ARG BUILD_DATE
-ARG VCS_REF
-
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre-alpine@sha256:9f1de3e01a3c43e2f158abf408ec761813da639961bde93427c1ea42a619a09b
 
 RUN apk add --no-cache shadow tzdata
 
@@ -16,16 +11,20 @@ RUN addgroup -S appgroup && \
 
 COPY --chown=appuser:appgroup dependencies/ ./
 COPY --chown=appuser:appgroup spring-boot-loader/ ./
-COPY --chown=appuser:appgroup snapshot-dependencies/ ./
+COPY --chown=appuser:appgroup snapshot-dependencies*/ ./
 COPY --chown=appuser:appgroup application/ ./
 
 ENV TZ=Africa/Nairobi
 
 EXPOSE 8086
 
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD wget -qO- http://localhost:8086/actuator/health || exit 1
+
 USER appuser
 
-CMD ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "org.springframework.boot.loader.launch.JarLauncher"]
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0"]
+CMD ["org.springframework.boot.loader.launch.JarLauncher"]
 
 ARG VERSION
 ARG BUILD_DATE
