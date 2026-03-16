@@ -1,0 +1,9 @@
+# spring configuration
+spring:
+  # application configuration
+  application:
+    name: ebikes-routing
+
+  # active profile loaded from environment variable
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
