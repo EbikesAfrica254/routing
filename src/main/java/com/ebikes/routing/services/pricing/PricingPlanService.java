@@ -5,6 +5,9 @@ import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,11 +19,15 @@ import com.ebikes.routing.database.entities.PricingModifier;
 import com.ebikes.routing.database.entities.PricingPlan;
 import com.ebikes.routing.database.repositories.PricingModifierRepository;
 import com.ebikes.routing.database.repositories.PricingPlanRepository;
+import com.ebikes.routing.database.specifications.PricingPlanSpecifications;
 import com.ebikes.routing.domain.ModifierEvaluationContext;
 import com.ebikes.routing.dtos.events.outgoing.PricingPlanActivatedEvent;
+import com.ebikes.routing.dtos.requests.filters.PricingPlanFilter;
 import com.ebikes.routing.dtos.requests.pricing.CreatePricingPlanRequest;
 import com.ebikes.routing.dtos.requests.pricing.UpdatePricingPlanRequest;
+import com.ebikes.routing.dtos.responses.api.PaginatedResponse;
 import com.ebikes.routing.dtos.responses.pricing.PricingPlanDetailResponse;
+import com.ebikes.routing.dtos.responses.pricing.PricingPlanSummaryResponse;
 import com.ebikes.routing.dtos.responses.pricing.ResolvedPricingResponse;
 import com.ebikes.routing.enums.OrderType;
 import com.ebikes.routing.enums.ResponseCode;
@@ -33,6 +40,7 @@ import com.ebikes.routing.publishers.AuditEventPublisher;
 import com.ebikes.routing.services.events.OutboxService;
 import com.ebikes.routing.support.audit.AuditMetadataBuilder;
 import com.ebikes.routing.support.context.ExecutionContext;
+import com.ebikes.routing.support.database.FilterUtilities;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,42 +59,6 @@ public class PricingPlanService {
   private final PricingPlanMapper planMapper;
   private final PricingPlanRepository planRepository;
   private final PricingProperties pricingProperties;
-
-  @Transactional
-  public PricingPlanDetailResponse createPlan(CreatePricingPlanRequest request) {
-    log.info(
-        "Creating pricing plan: version={}, scopeType={}, vehicleClass={}",
-        request.version(),
-        request.scopeType(),
-        request.vehicleClass());
-
-    PricingPlan plan =
-        PricingPlan.builder()
-            .baseFareAmount(request.baseFareAmount())
-            .effectiveFrom(request.effectiveFrom())
-            .effectiveTo(request.effectiveTo())
-            .maximumChargeAmount(request.maximumChargeAmount())
-            .minimumChargeAmount(request.minimumChargeAmount())
-            .perKmRateAmount(request.perKmRateAmount())
-            .scopeId(request.scopeId())
-            .scopeType(request.scopeType())
-            .vehicleClass(request.vehicleClass())
-            .version(request.version())
-            .build();
-
-    plan = planRepository.save(plan);
-
-    auditEventPublisher.publishSuccess(
-        plan.getId(),
-        PricingPlan.class.getSimpleName(),
-        EventTypes.PricingPlans.CREATED,
-        AuditMetadataBuilder.forPricingPlan(plan),
-        RoutingKeys.PRICING_PLAN_AUDIT);
-
-    log.info("Pricing plan created: planId={}, version={}", plan.getId(), plan.getVersion());
-
-    return planMapper.toDetailResponse(plan);
-  }
 
   @Transactional
   public PricingPlanDetailResponse activatePlan(UUID planId) {
@@ -133,6 +105,53 @@ public class PricingPlanService {
     log.info("Pricing plan activated: planId={}, version={}", plan.getId(), plan.getVersion());
 
     return planMapper.toDetailResponse(plan);
+  }
+
+  @Transactional
+  public PricingPlanDetailResponse createPlan(CreatePricingPlanRequest request) {
+    log.info(
+        "Creating pricing plan: version={}, scopeType={}, vehicleClass={}",
+        request.version(),
+        request.scopeType(),
+        request.vehicleClass());
+
+    PricingPlan plan =
+        PricingPlan.builder()
+            .baseFareAmount(request.baseFareAmount())
+            .effectiveFrom(request.effectiveFrom())
+            .effectiveTo(request.effectiveTo())
+            .maximumChargeAmount(request.maximumChargeAmount())
+            .minimumChargeAmount(request.minimumChargeAmount())
+            .perKmRateAmount(request.perKmRateAmount())
+            .scopeId(request.scopeId())
+            .scopeType(request.scopeType())
+            .vehicleClass(request.vehicleClass())
+            .version(request.version())
+            .build();
+
+    plan = planRepository.save(plan);
+
+    auditEventPublisher.publishSuccess(
+        plan.getId(),
+        PricingPlan.class.getSimpleName(),
+        EventTypes.PricingPlans.CREATED,
+        AuditMetadataBuilder.forPricingPlan(plan),
+        RoutingKeys.PRICING_PLAN_AUDIT);
+
+    log.info("Pricing plan created: planId={}, version={}", plan.getId(), plan.getVersion());
+
+    return planMapper.toDetailResponse(plan);
+  }
+
+  @Transactional
+  public PaginatedResponse<PricingPlanSummaryResponse> searchPricingPlans(
+      PricingPlanFilter filter) {
+    Pageable pageable =
+        FilterUtilities.buildPageable(filter, PricingPlanSpecifications.ALLOWED_SORT_FIELDS);
+    Specification<PricingPlan> spec = PricingPlanSpecifications.buildSpecification(filter);
+    Page<PricingPlan> page = planRepository.findAll(spec, pageable);
+    return PaginatedResponse.from(
+        "Pricing plans retrieved.", page.map(planMapper::toSummaryResponse));
   }
 
   @Transactional

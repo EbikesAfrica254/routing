@@ -245,7 +245,8 @@ public class PricingQuoteService {
         FilterUtilities.buildPageable(filter, PricingQuoteSpecifications.ALLOWED_SORT_FIELDS);
     Specification<PricingQuote> spec = PricingQuoteSpecifications.buildSpecification(filter);
     Page<PricingQuote> page = quoteRepository.findAll(spec, pageable);
-    return PaginatedResponse.from(null, page.map(quoteMapper::toSummaryResponse));
+    return PaginatedResponse.from(
+        "Pricing quotes retrieved.", page.map(quoteMapper::toSummaryResponse));
   }
 
   private void validateQuoteRequest(CreateQuoteRequest request) {

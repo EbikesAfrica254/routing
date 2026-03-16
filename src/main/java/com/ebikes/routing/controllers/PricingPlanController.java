@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -16,10 +17,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.ebikes.routing.dtos.requests.filters.PricingPlanFilter;
 import com.ebikes.routing.dtos.requests.pricing.CreatePricingPlanRequest;
 import com.ebikes.routing.dtos.requests.pricing.UpdatePricingPlanRequest;
+import com.ebikes.routing.dtos.responses.api.PaginatedResponse;
 import com.ebikes.routing.dtos.responses.api.SuccessResponse;
 import com.ebikes.routing.dtos.responses.pricing.PricingPlanDetailResponse;
+import com.ebikes.routing.dtos.responses.pricing.PricingPlanSummaryResponse;
 import com.ebikes.routing.dtos.responses.pricing.ResolvedPricingResponse;
 import com.ebikes.routing.enums.OrderType;
 import com.ebikes.routing.enums.VehicleClass;
@@ -63,5 +67,12 @@ public class PricingPlanController {
       @RequestParam OrderType orderType) {
     return SuccessResponse.of(
         pricingPlanService.resolvePlan(vehicleClass, organizationId, branchId, orderType));
+  }
+
+  @GetMapping
+  @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZATION_ADMIN','BRANCH_ADMIN')")
+  public PaginatedResponse<PricingPlanSummaryResponse> searchPlans(
+      @Valid @ModelAttribute PricingPlanFilter filter) {
+    return pricingPlanService.searchPricingPlans(filter);
   }
 }

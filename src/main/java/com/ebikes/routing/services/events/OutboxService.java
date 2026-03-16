@@ -2,7 +2,6 @@ package com.ebikes.routing.services.events;
 
 import java.io.Serializable;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -30,15 +29,6 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @Slf4j
 public class OutboxService {
-
-  private static final Set<String> ALLOWED_SORT_FIELDS =
-      Set.of(
-          OutboxSpecifications.FIELD_CREATED_AT,
-          OutboxSpecifications.FIELD_EVENT_TYPE,
-          OutboxSpecifications.FIELD_RETRY_COUNT,
-          OutboxSpecifications.FIELD_STATUS,
-          OutboxSpecifications.FIELD_UPDATED_AT);
-
   private final OutboxMapper mapper;
   private final OutboxRepository repository;
 
@@ -79,7 +69,8 @@ public class OutboxService {
   @Transactional(readOnly = true)
   public PaginatedResponse<OutboxResponse> search(OutboxFilter filter) {
     Specification<Outbox> spec = OutboxSpecifications.buildSpecification(filter);
-    Pageable pageable = FilterUtilities.buildPageable(filter, ALLOWED_SORT_FIELDS);
+    Pageable pageable =
+        FilterUtilities.buildPageable(filter, OutboxSpecifications.ALLOWED_SORT_FIELDS);
     Page<OutboxResponse> page = repository.findAll(spec, pageable).map(mapper::toResponse);
     return PaginatedResponse.from("Outbox events retrieved", page);
   }
