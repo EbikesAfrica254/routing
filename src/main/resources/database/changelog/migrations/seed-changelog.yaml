@@ -1,0 +1,8 @@
+databaseChangeLog:
+  - changeSet:
+      id: 01-seed-vehicle-routing-profiles
+      author: system
+      changes:
+        - sqlFile:
+            path: seed/01-seed-vehicle-routing-profiles.sql
+            relativeToChangelogFile: true

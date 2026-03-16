@@ -1,0 +1,64 @@
+databaseChangeLog:
+  - changeSet:
+      id: 00-routing-schema
+      author: system
+      changes:
+        - sqlFile:
+            path: schema/00-routing-schema.sql
+            relativeToChangelogFile: true
+
+  - changeSet:
+      id: 01-inbox
+      author: system
+      changes:
+        - sqlFile:
+            path: schema/01-inbox.sql
+            relativeToChangelogFile: true
+
+  - changeSet:
+      id: 02-outbox
+      author: system
+      changes:
+        - sqlFile:
+            path: schema/02-outbox.sql
+            relativeToChangelogFile: true
+
+  - changeSet:
+      id: 03-vehicle-routing-profiles
+      author: system
+      changes:
+        - sqlFile:
+            path: schema/03-vehicle-routing-profiles.sql
+            relativeToChangelogFile: true
+
+  - changeSet:
+      id: 04-pricing-plans
+      author: system
+      changes:
+        - sqlFile:
+            path: schema/04-pricing-plans.sql
+            relativeToChangelogFile: true
+
+  - changeSet:
+      id: 05-pricing-modifiers
+      author: system
+      changes:
+        - sqlFile:
+            path: schema/05-pricing-modifiers.sql
+            relativeToChangelogFile: true
+
+  - changeSet:
+      id: 06-pricing-quotes
+      author: system
+      changes:
+        - sqlFile:
+            path: schema/06-pricing-quotes.sql
+            relativeToChangelogFile: true
+
+  - changeSet:
+      id: 07-pricing-quote-modifiers
+      author: system
+      changes:
+        - sqlFile:
+            path: schema/07-pricing-quote-modifiers.sql
+            relativeToChangelogFile: true
