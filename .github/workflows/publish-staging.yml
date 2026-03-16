@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  actions: read
 
 concurrency:
   group: publish-staging-${{ github.event.workflow_run.head_branch }}
@@ -26,17 +27,50 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Checkout commit that passed CI
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 1
-
       - name: Derive image coordinates
         id: image
         run: |
           echo "short_sha=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
           echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
+      - name: Download JAR layers
+        uses: actions/download-artifact@v4
+        with:
+          name: jar-layers-${{ github.event.workflow_run.head_sha }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: extracted/
+
+      - name: Write Dockerfile
+        run: |
+          cat > Dockerfile << 'EOF'
+          FROM eclipse-temurin:21-jre-alpine
+
+          RUN apk add --no-cache shadow tzdata
+
+          WORKDIR /app
+
+          RUN addgroup -S appgroup && \
+              adduser -S appuser -G appgroup && \
+              mkdir -p /app/logs && \
+              chown -R appuser:appgroup /app
+
+          COPY --chown=appuser:appgroup dependencies/ ./
+          COPY --chown=appuser:appgroup spring-boot-loader/ ./
+          COPY --chown=appuser:appgroup snapshot-dependencies/ ./
+          COPY --chown=appuser:appgroup application/ ./
+
+          ENV TZ=Africa/Nairobi
+
+          EXPOSE 8086
+
+          USER appuser
+
+          CMD ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "org.springframework.boot.loader.launch.JarLauncher"]
+          EOF
+
+      - name: Move extracted layers to build context
+        run: mv extracted/* .
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
