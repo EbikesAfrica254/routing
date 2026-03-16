@@ -1,0 +1,79 @@
+name: Publish Staging
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-staging-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  publish-staging:
+    name: publish-staging
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout commit that passed CI
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 1
+
+      - name: Derive image coordinates
+        id: image
+        run: |
+          echo "short_sha=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+          echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push staging image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ vars.ECR_REGISTRY }}/routing:staging
+            ${{ vars.ECR_REGISTRY }}/routing:sha-${{ steps.image.outputs.short_sha }}
+          labels: |
+            org.opencontainers.image.version=staging
+            org.opencontainers.image.created=${{ steps.image.outputs.build_date }}
+            org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=registry,ref=${{ vars.ECR_REGISTRY }}/routing:buildcache
+          cache-to: type=registry,ref=${{ vars.ECR_REGISTRY }}/routing:buildcache,mode=max
+
+      - name: Publish summary
+        run: |
+          echo "## Staging Publish Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Branch: staging" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${{ github.event.workflow_run.head_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image: \`${{ vars.ECR_REGISTRY }}/routing:staging\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image: \`${{ vars.ECR_REGISTRY }}/routing:sha-${{ steps.image.outputs.short_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
