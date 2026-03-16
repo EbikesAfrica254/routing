@@ -1,0 +1,7 @@
+Copyright © 2026 eBikes Africa. All rights reserved.
+
+This software and its source code are proprietary and confidential.
+
+Unauthorized copying, distribution, modification, or use of this
+software, in whole or in part, is strictly prohibited without the
+express written permission of eBikes Africa.
