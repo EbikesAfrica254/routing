@@ -41,14 +41,33 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: extracted/
 
-      - name: Checkout Dockerfile only
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          sparse-checkout: |
-            Dockerfile
-          sparse-checkout-cone-mode: false
-          fetch-depth: 1
+      - name: Write Dockerfile
+        run: |
+          cat > Dockerfile << 'EOF'
+          FROM eclipse-temurin:21-jre-alpine
+
+          RUN apk add --no-cache shadow tzdata
+
+          WORKDIR /app
+
+          RUN addgroup -S appgroup && \
+              adduser -S appuser -G appgroup && \
+              mkdir -p /app/logs && \
+              chown -R appuser:appgroup /app
+
+          COPY --chown=appuser:appgroup dependencies/ ./
+          COPY --chown=appuser:appgroup spring-boot-loader/ ./
+          COPY --chown=appuser:appgroup snapshot-dependencies/ ./
+          COPY --chown=appuser:appgroup application/ ./
+
+          ENV TZ=Africa/Nairobi
+
+          EXPOSE 8086
+
+          USER appuser
+
+          CMD ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "org.springframework.boot.loader.launch.JarLauncher"]
+          EOF
 
       - name: Move extracted layers to build context
         run: mv extracted/* .
