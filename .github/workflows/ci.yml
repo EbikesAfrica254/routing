@@ -59,3 +59,19 @@ jobs:
 
       - name: Run Semgrep
         run: semgrep --config auto --error
+
+      - name: Extract JAR layers
+        run: |
+          java -Djarmode=layertools -jar target/*.jar extract --destination extracted/
+
+      - name: Upload JAR layers
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: jar-layers-${{ github.sha }}
+          path: |
+            extracted/dependencies/
+            extracted/spring-boot-loader/
+            extracted/snapshot-dependencies/
+            extracted/application/
+          retention-days: 1
+          if-no-files-found: error
