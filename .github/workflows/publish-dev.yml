@@ -57,7 +57,7 @@ jobs:
 
           COPY --chown=appuser:appgroup dependencies/ ./
           COPY --chown=appuser:appgroup spring-boot-loader/ ./
-          COPY --chown=appuser:appgroup snapshot-dependencies/ ./
+          COPY --chown=appuser:appgroup snapshot-dependencies*/ ./
           COPY --chown=appuser:appgroup application/ ./
 
           ENV TZ=Africa/Nairobi
