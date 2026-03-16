@@ -95,15 +95,15 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ vars.ECR_REGISTRY }}/routing:dev
-            ${{ vars.ECR_REGISTRY }}/routing:sha-${{ steps.image.outputs.short_sha }}
+            ${{ vars.ECR_REGISTRY }}/ebikes/routing:dev
+            ${{ vars.ECR_REGISTRY }}/ebikes/routing:sha-${{ steps.image.outputs.short_sha }}
           labels: |
             org.opencontainers.image.version=dev
             org.opencontainers.image.created=${{ steps.image.outputs.build_date }}
             org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=registry,ref=${{ vars.ECR_REGISTRY }}/routing:buildcache
-          cache-to: type=registry,ref=${{ vars.ECR_REGISTRY }}/routing:buildcache,mode=max
+          cache-from: type=registry,ref=${{ vars.ECR_REGISTRY }}/ebikes/routing:buildcache
+          cache-to: type=registry,ref=${{ vars.ECR_REGISTRY }}/ebikes/routing:buildcache,mode=max
 
       - name: Publish summary
         run: |
