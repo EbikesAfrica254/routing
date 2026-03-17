@@ -1,9 +1,96 @@
-# spring configuration
+logging:
+  level:
+    root: INFO
+    com.ebikes.routing: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    tags:
+      application: ebikes-routing
+
+server:
+  port: ${SERVER_PORT:8093}
+
+pricing:
+  preview-expiry-minutes: ${PRICING_PREVIEW_EXPIRY_MINUTES:15}
+  zone-id: ${PRICING_ZONE_ID:Africa/Nairobi}
+
+routing:
+  valhalla:
+    base-url: ${ROUTING_VALHALLA_BASE_URL}
+    timeout-seconds: ${ROUTING_VALHALLA_TIMEOUT_SECONDS:5}
+  fallback:
+    average-speed-kmh:
+      bicycle: ${ROUTING_FALLBACK_AVERAGE_SPEED_KMH_BICYCLE:15}
+      auto: ${ROUTING_FALLBACK_AVERAGE_SPEED_KMH_AUTO:30}
+  matrix:
+    max-agents: ${ROUTING_MATRIX_MAX_AGENTS:25}
+
+security:
+  public-endpoints:
+    - /actuator/health
+  scopes:
+    - email
+    - openid
+    - profile
+
 spring:
-  # application configuration
   application:
     name: ebikes-routing
 
-  # active profile loaded from environment variable
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local}
+  cloud:
+    stream:
+      output-bindings: eventPublisher-out-0
+      bindings:
+        eventPublisher-out-0:
+          destination: ebikes.domain-events
+      rabbit:
+        bindings:
+          eventPublisher-out-0:
+            producer:
+              declareExchange: false
+              routingKeyExpression: "headers['routingKey']"
+
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    hikari:
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:10}
+      minimum-idle: ${SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE:2}
+
+  liquibase:
+    enabled: true
+    change-log: classpath:database/changelog/changelog-main.yaml
+    liquibase-schema: routing
+    parameters:
+      searchPath: classpath:database/changelog/
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: routing
+        format_sql: false
+        show_sql: false
+
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME}
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI}
+          jwk-set-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI}
