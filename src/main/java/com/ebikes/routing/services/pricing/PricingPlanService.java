@@ -102,7 +102,7 @@ public class PricingPlanService {
         AuditMetadataBuilder.forPricingPlan(plan),
         RoutingKeys.PRICING_PLAN_AUDIT);
 
-    log.info("Pricing plan activated: planId={}, version={}", plan.getId(), plan.getVersion());
+    log.debug("Pricing plan activated: planId={}, version={}", plan.getId(), plan.getVersion());
 
     return planMapper.toDetailResponse(plan);
   }
@@ -138,7 +138,7 @@ public class PricingPlanService {
         AuditMetadataBuilder.forPricingPlan(plan),
         RoutingKeys.PRICING_PLAN_AUDIT);
 
-    log.info("Pricing plan created: planId={}, version={}", plan.getId(), plan.getVersion());
+    log.debug("Pricing plan created: planId={}, version={}", plan.getId(), plan.getVersion());
 
     return planMapper.toDetailResponse(plan);
   }
@@ -175,7 +175,7 @@ public class PricingPlanService {
         AuditMetadataBuilder.forPricingPlan(plan),
         RoutingKeys.PRICING_PLAN_AUDIT);
 
-    log.info("Pricing plan updated: planId={}, version={}", plan.getId(), plan.getVersion());
+    log.debug("Pricing plan updated: planId={}, version={}", plan.getId(), plan.getVersion());
 
     return planMapper.toDetailResponse(plan);
   }

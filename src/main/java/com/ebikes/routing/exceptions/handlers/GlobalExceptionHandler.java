@@ -101,7 +101,6 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(MethodArgumentNotValidException.class)
   public ResponseEntity<ErrorResponse> handleMethodArgumentNotValidException(
       MethodArgumentNotValidException ex, HttpServletRequest request) {
-    log.info("MethodArgumentNotValidException", ex);
 
     List<ErrorDetail> errors =
         ex.getBindingResult().getFieldErrors().stream()
@@ -110,9 +109,10 @@ public class GlobalExceptionHandler {
             .toList();
 
     log.warn(
-        "Argument validation failed: errorCount={}, path={}",
+        "Request validation failed: errorCount={}, path={}, details={}",
         errors.size(),
-        request.getRequestURI());
+        request.getRequestURI(),
+        errors);
 
     ErrorResponse error =
         ErrorResponseBuilder.buildErrorResponseWithErrors(

@@ -1,147 +1,32 @@
-# logging configuration
 logging:
   level:
-    root: ${LOG_LEVEL_ROOT}
     com.ebikes.routing: DEBUG
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 
-# actuator configuration (minimal health checks only)
 management:
   endpoint:
     health:
-      show-details: ${ACTUATOR_HEALTH_DETAILS}
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics,prometheus
+      show-details: always
 
-# pricing configuration
-pricing:
-  preview-expiry-minutes: 15
-  zone-id: Africa/Nairobi
-
-# routing configuration
 routing:
   valhalla:
     base-url: http://localhost:8002
-    timeout-seconds: 5
-  fallback:
-    average-speed-kmh:
-      bicycle: 15
-      auto: 30
 
-# security configuration
-security:
-  public-endpoints:
-    - /actuator/health
-    - /api-docs/**
-    - /swagger-ui/**
-    - /verify/**
-    - /webjars/**
-  scopes:
-    - email
-    - openid
-    - profile
-
-# server configuration
-server:
-  port: ${SERVER_PORT}
-  servlet:
-    context-path: /ebikes-routing
-
-# spring configuration
 spring:
+  config:
+    import: configtree:${user.home}/Work/EBikes/secrets/routing/
 
-  # cloud configuration
-  cloud:
-    stream:
-      output-bindings: eventPublisher-out-0
-      bindings:
-        eventPublisher-out-0:
-          destination: ebikes.domain-events
-      rabbit:
-        bindings:
-          eventPublisher-out-0:
-            producer:
-              declareExchange: false
-              routingKeyExpression: "headers['routingKey']"
-
-  # data configuration
-  data:
-    redis:
-      host: ${REDIS_HOST}
-      password: ${REDIS_PASSWORD}
-      port: ${REDIS_PORT}
-      repositories:
-        enabled: false
-      ssl:
-        enabled: ${REDIS_SSL_ENABLED}
-
-  # database configuration
   datasource:
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: ${DB_POOL_MAX}
-      minimum-idle: ${DB_POOL_MIN_IDLE}
-    password: ${DATABASE_PASSWORD}
-    url: ${DATABASE_URL}
-    username: ${DATABASE_USER}
+    url: jdbc:postgresql://localhost:5432/ebikes_routing
+    username: postgres
 
-  # devtools configuration
-  devtools:
-    add-properties: false
-    restart:
-      enabled: ${DEVTOOLS_RESTART_ENABLED}
-
-  # http configuration
-  http:
-    clients:
-      connect-timeout: 5s
-      read-timeout: 5s
-
-  # jpa configuration
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    open-in-view: false
-    properties:
-      hibernate:
-        default_schema: routing
-        format_sql: ${HIBERNATE_FORMAT_SQL}
-        show_sql: ${HIBERNATE_SHOW_SQL}
-
-  # database migration configuration
-  liquibase:
-    change-log: classpath:database/changelog/changelog-main.yaml
-    enabled: ${ILIQUIBASE_ENABLED}
-    liquibase-schema: routing
-    parameters:
-      searchPath: classpath:database/changelog/
-
-  # rabbit configurations
   rabbitmq:
-    host: ${RABBITMQ_HOST}
-    password: ${RABBITMQ_PASSWORD}
-    username: ${RABBITMQ_USER}
+    host: localhost
+    port: 5672
+    username: guest
 
-  # security configuration
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${KEYCLOAK_ISSUER_URI}
-          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
-
-  # task configuration
-  task:
-    scheduling:
-      pool:
-        size: 2
-
-  # web configuration
-  web:
-    resources:
-      cache:
-        cachecontrol:
-          max-age: PT1H
+          issuer-uri: http://localhost:8080/realms/ebikes
+          jwk-set-uri: http://localhost:8080/realms/ebikes/protocol/openid-connect/certs

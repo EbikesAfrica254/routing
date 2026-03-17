@@ -3,6 +3,7 @@ package com.ebikes.routing.adapters;
 import java.util.List;
 
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -71,7 +72,7 @@ public class ValhallaRoutingAdapter {
   }
 
   private int extractStatus(RestClientException e) {
-    if (e instanceof org.springframework.web.client.HttpStatusCodeException statusEx) {
+    if (e instanceof HttpStatusCodeException statusEx) {
       return statusEx.getStatusCode().value();
     }
     return 500;

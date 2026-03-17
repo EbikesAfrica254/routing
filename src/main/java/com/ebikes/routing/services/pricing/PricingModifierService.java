@@ -99,7 +99,7 @@ public class PricingModifierService {
         AuditMetadataBuilder.forPricingModifier(modifier),
         RoutingKeys.PRICING_MODIFIER_AUDIT);
 
-    log.info(
+    log.debug(
         "Pricing modifier activated: modifierId={}, version={}",
         modifier.getId(),
         modifier.getVersion());
@@ -140,7 +140,7 @@ public class PricingModifierService {
         AuditMetadataBuilder.forPricingModifier(modifier),
         RoutingKeys.PRICING_MODIFIER_AUDIT);
 
-    log.info(
+    log.debug(
         "Pricing modifier created: modifierId={}, version={}",
         modifier.getId(),
         modifier.getVersion());
@@ -180,7 +180,7 @@ public class PricingModifierService {
         AuditMetadataBuilder.forPricingModifier(modifier),
         RoutingKeys.PRICING_MODIFIER_AUDIT);
 
-    log.info(
+    log.debug(
         "Pricing modifier updated: modifierId={}, version={}",
         modifier.getId(),
         modifier.getVersion());

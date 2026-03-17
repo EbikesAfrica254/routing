@@ -84,7 +84,7 @@ public class RoutingService {
       int distanceMeters = (int) Math.round(summary.length() * METERS_PER_KM);
       int durationSeconds = (int) Math.round(summary.time());
 
-      log.info(
+      log.debug(
           "Valhalla route computed: distanceMeters={}, durationSeconds={}, costing={}",
           distanceMeters,
           durationSeconds,
@@ -128,7 +128,7 @@ public class RoutingService {
     double distanceKm = adjustedMeters / METERS_PER_KM;
     int durationSeconds = (int) Math.round((distanceKm / averageSpeedKmh) * SECONDS_PER_HOUR);
 
-    log.info(
+    log.debug(
         "Haversine fallback computed: distanceMeters={}, durationSeconds={}, costing={}",
         adjustedMeters,
         durationSeconds,

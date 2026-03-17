@@ -205,7 +205,7 @@ public class PricingQuoteService {
         AuditMetadataBuilder.forPricingQuote(quote),
         RoutingKeys.PRICING_QUOTE_AUDIT);
 
-    log.info(
+    log.debug(
         "Pricing quote created: quoteId={}, commitQuote={}, isFallback={}",
         quote.getId(),
         request.commitQuote(),
