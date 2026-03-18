@@ -14,7 +14,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -61,17 +60,41 @@ jobs:
         run: semgrep --config auto --error
 
       - name: Extract JAR layers
+        if: github.event_name == 'push'
         run: |
+          set -Eeuo pipefail
           java -Djarmode=layertools -jar target/*.jar extract --destination extracted/
 
-      - name: Upload JAR layers
+      - name: Prepare Docker build context artifact
+        if: github.event_name == 'push'
+        run: |
+          set -Eeuo pipefail
+
+          rm -rf docker-build-context
+          mkdir -p docker-build-context
+
+          test -f Dockerfile
+          test -d extracted/application
+          test -d extracted/dependencies
+          test -d extracted/spring-boot-loader
+
+          cp Dockerfile docker-build-context/
+          cp -R extracted/application docker-build-context/
+          cp -R extracted/dependencies docker-build-context/
+          cp -R extracted/spring-boot-loader docker-build-context/
+
+          if [ -d extracted/snapshot-dependencies ]; then
+            cp -R extracted/snapshot-dependencies docker-build-context/
+          fi
+
+          find docker-build-context -maxdepth 2 | sort
+
+      - name: Upload Docker build context
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
-          name: jar-layers-${{ github.sha }}
-          path: |
-            extracted/dependencies/
-            extracted/spring-boot-loader/
-            extracted/snapshot-dependencies/
-            extracted/application/
+          name: docker-build-context-${{ github.sha }}
+          path: docker-build-context/
           retention-days: 1
           if-no-files-found: error
+          include-hidden-files: false
