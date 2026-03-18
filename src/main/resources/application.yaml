@@ -14,6 +14,8 @@ management:
   metrics:
     tags:
       application: ebikes-routing
+  server:
+    port: ${MANAGEMENT_SERVER_PORT:9093}
 
 server:
   port: ${SERVER_PORT:8093}
