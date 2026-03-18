@@ -26,12 +26,29 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
 
+    env:
+      IMAGE_REPOSITORY: ebikes/routing
+
     steps:
+      - name: Checkout Dockerfile
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          sparse-checkout: |
+            Dockerfile
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
       - name: Derive image coordinates
         id: image
+        shell: bash
         run: |
-          echo "short_sha=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
-          echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+          FULL_SHA="${{ github.event.workflow_run.head_sha }}"
+          BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          echo "full_sha=$FULL_SHA" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=sha-$FULL_SHA" >> "$GITHUB_OUTPUT"
+          echo "build_date=$BUILD_DATE" >> "$GITHUB_OUTPUT"
 
       - name: Download JAR layers
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -41,36 +58,40 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: extracted/
 
-      - name: Write Dockerfile
+      - name: Prepare Docker build context
+        shell: bash
         run: |
-          cat > Dockerfile << 'EOF'
-          FROM eclipse-temurin:21-jre-alpine
+          set -Eeuo pipefail
 
-          RUN apk add --no-cache shadow tzdata
+          rm -rf image-context
+          mkdir -p image-context
 
-          WORKDIR /app
+          cp Dockerfile image-context/
 
-          RUN addgroup -S appgroup && \
-              adduser -S appuser -G appgroup && \
-              mkdir -p /app/logs && \
-              chown -R appuser:appgroup /app
+          if [ -d extracted/application ] && [ -d extracted/dependencies ] && [ -d extracted/spring-boot-loader ]; then
+            cp -R extracted/application image-context/
+            cp -R extracted/dependencies image-context/
+            cp -R extracted/spring-boot-loader image-context/
+            if find extracted -maxdepth 1 -type d -name 'snapshot-dependencies*' | grep -q .; then
+              find extracted -maxdepth 1 -type d -name 'snapshot-dependencies*' -exec cp -R {} image-context/ \;
+            fi
+          else
+            LAYER_ROOT="$(find extracted -mindepth 1 -maxdepth 2 -type d -name application | head -n1 | xargs -r dirname)"
+            if [ -z "${LAYER_ROOT:-}" ]; then
+              echo "Could not locate Spring Boot layer directories in extracted artifact"
+              find extracted -maxdepth 5 | sort
+              exit 1
+            fi
 
-          COPY --chown=appuser:appgroup dependencies/ ./
-          COPY --chown=appuser:appgroup spring-boot-loader/ ./
-          COPY --chown=appuser:appgroup snapshot-dependencies*/ ./
-          COPY --chown=appuser:appgroup application/ ./
+            cp -R "$LAYER_ROOT/application" image-context/
+            cp -R "$LAYER_ROOT/dependencies" image-context/
+            cp -R "$LAYER_ROOT/spring-boot-loader" image-context/
+            if find "$LAYER_ROOT" -maxdepth 1 -type d -name 'snapshot-dependencies*' | grep -q .; then
+              find "$LAYER_ROOT" -maxdepth 1 -type d -name 'snapshot-dependencies*' -exec cp -R {} image-context/ \;
+            fi
+          fi
 
-          ENV TZ=Africa/Nairobi
-
-          EXPOSE 8086
-
-          USER appuser
-
-          CMD ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "org.springframework.boot.loader.launch.JarLauncher"]
-          EOF
-
-      - name: Move extracted layers to build context
-        run: mv extracted/* .
+          find image-context -maxdepth 2 -type d | sort
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c
@@ -88,28 +109,38 @@ jobs:
           driver-opts: network=host
 
       - name: Build and push dev image
+        id: build
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./image-context
+          file: ./image-context/Dockerfile
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ vars.ECR_REGISTRY }}/ebikes/routing:dev
-            ${{ vars.ECR_REGISTRY }}/ebikes/routing:sha-${{ steps.image.outputs.short_sha }}
+            ${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:dev
+            ${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.image.outputs.sha_tag }}
+          build-args: |
+            VERSION=dev
+            BUILD_DATE=${{ steps.image.outputs.build_date }}
+            VCS_REF=${{ steps.image.outputs.full_sha }}
           labels: |
+            org.opencontainers.image.title=eBikes Africa routing service
             org.opencontainers.image.version=dev
             org.opencontainers.image.created=${{ steps.image.outputs.build_date }}
-            org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha }}
+            org.opencontainers.image.revision=${{ steps.image.outputs.full_sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=registry,ref=${{ vars.ECR_REGISTRY }}/ebikes/routing:buildcache
-          cache-to: type=registry,ref=${{ vars.ECR_REGISTRY }}/ebikes/routing:buildcache,mode=max
+            org.opencontainers.image.ref.name=dev
+          cache-from: type=registry,ref=${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:buildcache
+          cache-to: type=registry,ref=${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:buildcache,mode=max
 
       - name: Publish summary
+        shell: bash
         run: |
           echo "## Dev Publish Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Branch: dev" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Commit: \`${{ github.event.workflow_run.head_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Image: \`${{ vars.ECR_REGISTRY }}/routing:dev\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Image: \`${{ vars.ECR_REGISTRY }}/routing:sha-${{ steps.image.outputs.short_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${{ steps.image.outputs.full_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mutable tag: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:dev\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Immutable tag: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.image.outputs.sha_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Digest: \`${{ steps.build.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Deployment reference: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}@${{ steps.build.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
