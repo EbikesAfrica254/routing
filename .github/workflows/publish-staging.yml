@@ -9,8 +9,8 @@ on:
 
 permissions:
   contents: read
-  id-token: write
   actions: read
+  id-token: write
 
 concurrency:
   group: publish-staging-${{ github.event.workflow_run.head_branch }}
@@ -22,76 +22,75 @@ jobs:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'staging'
+      github.event.workflow_run.head_branch == 'staging' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-22.04
     timeout-minutes: 30
+    environment:
+      name: staging
 
     env:
       IMAGE_REPOSITORY: ebikes/routing
 
     steps:
-      - name: Checkout Dockerfile
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          sparse-checkout: |
-            Dockerfile
-          sparse-checkout-cone-mode: false
-          fetch-depth: 1
-
       - name: Derive image coordinates
         id: image
         shell: bash
         run: |
+          set -Eeuo pipefail
+
           FULL_SHA="${{ github.event.workflow_run.head_sha }}"
+          SHORT_SHA="${FULL_SHA:0:12}"
           BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
           echo "full_sha=$FULL_SHA" >> "$GITHUB_OUTPUT"
-          echo "sha_tag=sha-$FULL_SHA" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=sha-$SHORT_SHA" >> "$GITHUB_OUTPUT"
           echo "build_date=$BUILD_DATE" >> "$GITHUB_OUTPUT"
 
-      - name: Download JAR layers
+      - name: Download Docker build context artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: jar-layers-${{ github.event.workflow_run.head_sha }}
+          name: docker-build-context-${{ github.event.workflow_run.head_sha }}
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: extracted/
+          path: image-context/
 
-      - name: Prepare Docker build context
+      - name: Validate Docker build context
         shell: bash
         run: |
           set -Eeuo pipefail
 
-          rm -rf image-context
-          mkdir -p image-context
+          test -d image-context
+          test -f image-context/Dockerfile
+          test -d image-context/application
+          test -d image-context/dependencies
+          test -d image-context/spring-boot-loader
 
-          cp Dockerfile image-context/
-
-          if [ -d extracted/application ] && [ -d extracted/dependencies ] && [ -d extracted/spring-boot-loader ]; then
-            cp -R extracted/application image-context/
-            cp -R extracted/dependencies image-context/
-            cp -R extracted/spring-boot-loader image-context/
-            if find extracted -maxdepth 1 -type d -name 'snapshot-dependencies*' | grep -q .; then
-              find extracted -maxdepth 1 -type d -name 'snapshot-dependencies*' -exec cp -R {} image-context/ \;
-            fi
-          else
-            LAYER_ROOT="$(find extracted -mindepth 1 -maxdepth 2 -type d -name application | head -n1 | xargs -r dirname)"
-            if [ -z "${LAYER_ROOT:-}" ]; then
-              echo "Could not locate Spring Boot layer directories in extracted artifact"
-              find extracted -maxdepth 5 | sort
-              exit 1
-            fi
-
-            cp -R "$LAYER_ROOT/application" image-context/
-            cp -R "$LAYER_ROOT/dependencies" image-context/
-            cp -R "$LAYER_ROOT/spring-boot-loader" image-context/
-            if find "$LAYER_ROOT" -maxdepth 1 -type d -name 'snapshot-dependencies*' | grep -q .; then
-              find "$LAYER_ROOT" -maxdepth 1 -type d -name 'snapshot-dependencies*' -exec cp -R {} image-context/ \;
-            fi
+          if find image-context -type l | grep -q .; then
+            echo "Symlinks are not allowed in the Docker build context"
+            find image-context -type l -print
+            exit 1
           fi
 
-          find image-context -maxdepth 2 -type d | sort
+          if find image-context -mindepth 1 -maxdepth 3 \
+            ! -path 'image-context/Dockerfile' \
+            ! -path 'image-context/application' \
+            ! -path 'image-context/application/*' \
+            ! -path 'image-context/dependencies' \
+            ! -path 'image-context/dependencies/*' \
+            ! -path 'image-context/spring-boot-loader' \
+            ! -path 'image-context/spring-boot-loader/*' \
+            ! -path 'image-context/snapshot-dependencies' \
+            ! -path 'image-context/snapshot-dependencies/*' \
+            | grep -q .
+          then
+            echo "Unexpected files found in Docker build context"
+            find image-context -mindepth 1 -maxdepth 3 | sort
+            exit 1
+          fi
+
+          find image-context -maxdepth 2 | sort
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c
@@ -105,8 +104,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-        with:
-          driver-opts: network=host
 
       - name: Build and push staging image
         id: build
@@ -116,6 +113,8 @@ jobs:
           file: ./image-context/Dockerfile
           push: true
           platforms: linux/amd64
+          provenance: false
+          sbom: false
           tags: |
             ${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:staging
             ${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.image.outputs.sha_tag }}
@@ -130,17 +129,19 @@ jobs:
             org.opencontainers.image.revision=${{ steps.image.outputs.full_sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.ref.name=staging
-          cache-from: type=registry,ref=${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:buildcache
-          cache-to: type=registry,ref=${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:buildcache,mode=max
+          cache-from: type=registry,ref=${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:buildcache-staging
+          cache-to: type=registry,ref=${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:buildcache-staging,mode=max
 
       - name: Publish summary
         shell: bash
         run: |
-          echo "## Staging Publish Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Branch: staging" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Commit: \`${{ steps.image.outputs.full_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Mutable tag: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:staging\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Immutable tag: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.image.outputs.sha_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Digest: \`${{ steps.build.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Deployment reference: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}@${{ steps.build.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Staging Publish Summary"
+            echo
+            echo "- Branch: staging"
+            echo "- Commit: \`${{ steps.image.outputs.full_sha }}\`"
+            echo "- Mutable tag: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:staging\`"
+            echo "- Immutable tag: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.image.outputs.sha_tag }}\`"
+            echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
+            echo "- Deployment reference: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}@${{ steps.build.outputs.digest }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
