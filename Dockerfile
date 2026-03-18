@@ -18,9 +18,6 @@ ENV TZ=Africa/Nairobi
 
 EXPOSE 8086
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD wget -qO- http://localhost:8086/actuator/health || exit 1
-
 USER appuser
 
 ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0"]
