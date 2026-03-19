@@ -132,7 +132,50 @@ jobs:
           cache-from: type=registry,ref=${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:buildcache-dev
           cache-to: type=registry,ref=${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:buildcache-dev,mode=max
 
+      - name: Trigger routing deployment via SSM
+        id: deploy
+        shell: bash
+        env:
+          DEPLOYMENT_REFERENCE: ${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}@${{ steps.build.outputs.digest }}
+          INSTANCE_ID: ${{ vars.DEPLOY_INSTANCE_ID }}
+        run: |
+          set -Eeuo pipefail
+
+          test -n "${INSTANCE_ID}"
+          test -n "${DEPLOYMENT_REFERENCE}"
+
+          COMMAND_ID="$(
+            aws ssm send-command \
+              --region "${{ vars.AWS_REGION }}" \
+              --instance-ids "${INSTANCE_ID}" \
+              --document-name "AWS-RunShellScript" \
+              --comment "Deploy routing ${DEPLOYMENT_REFERENCE}" \
+              --parameters commands="/usr/local/bin/deploy-application.sh deploy routing ${DEPLOYMENT_REFERENCE}" \
+              --query 'Command.CommandId' \
+              --output text
+          )"
+
+          echo "command_id=${COMMAND_ID}" >> "$GITHUB_OUTPUT"
+
+          aws ssm wait command-executed \
+            --region "${{ vars.AWS_REGION }}" \
+            --command-id "${COMMAND_ID}" \
+            --instance-id "${INSTANCE_ID}"
+
+          STATUS="$(
+            aws ssm get-command-invocation \
+              --region "${{ vars.AWS_REGION }}" \
+              --command-id "${COMMAND_ID}" \
+              --instance-id "${INSTANCE_ID}" \
+              --query 'Status' \
+              --output text
+          )"
+
+          echo "SSM command status: ${STATUS}"
+          test "${STATUS}" = "Success"
+
       - name: Publish summary
+        if: always()
         shell: bash
         run: |
           {
@@ -144,4 +187,5 @@ jobs:
             echo "- Immutable tag: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.image.outputs.sha_tag }}\`"
             echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
             echo "- Deployment reference: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}@${{ steps.build.outputs.digest }}\`"
+            echo "- SSM command id: \`${{ steps.deploy.outputs.command_id }}\`"
           } >> "$GITHUB_STEP_SUMMARY"

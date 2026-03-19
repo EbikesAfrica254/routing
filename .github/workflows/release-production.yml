@@ -20,6 +20,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     timeout-minutes: 30
+    environment:
+      name: production
 
     env:
       IMAGE_REPOSITORY: ebikes/routing
@@ -38,13 +40,17 @@ jobs:
         id: image
         shell: bash
         run: |
+          set -Eeuo pipefail
+
           VERSION="${{ github.event.release.tag_name }}"
           FULL_SHA="${{ github.sha }}"
+          SHORT_SHA="${FULL_SHA:0:12}"
           BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "full_sha=$FULL_SHA" >> "$GITHUB_OUTPUT"
-          echo "sha_tag=sha-$FULL_SHA" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=sha-$SHORT_SHA" >> "$GITHUB_OUTPUT"
           echo "build_date=$BUILD_DATE" >> "$GITHUB_OUTPUT"
 
       - name: Find CI run for release SHA
@@ -134,6 +140,8 @@ jobs:
           file: ./image-context/Dockerfile
           push: true
           platforms: linux/amd64
+          provenance: false
+          sbom: false
           tags: |
             ${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.image.outputs.version }}
           build-args: |
@@ -150,14 +158,60 @@ jobs:
           cache-from: type=registry,ref=${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:buildcache
           cache-to: type=registry,ref=${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:buildcache,mode=max
 
+      - name: Trigger routing deployment via SSM
+        id: deploy
+        shell: bash
+        env:
+          DEPLOYMENT_REFERENCE: ${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}@${{ steps.build.outputs.digest }}
+          INSTANCE_ID: ${{ vars.DEPLOY_INSTANCE_ID }}
+        run: |
+          set -Eeuo pipefail
+
+          test -n "${INSTANCE_ID}"
+          test -n "${DEPLOYMENT_REFERENCE}"
+
+          COMMAND_ID="$(
+            aws ssm send-command \
+              --region "${{ vars.AWS_REGION }}" \
+              --instance-ids "${INSTANCE_ID}" \
+              --document-name "AWS-RunShellScript" \
+              --comment "Deploy routing ${DEPLOYMENT_REFERENCE}" \
+              --parameters commands="/usr/local/bin/deploy-application.sh deploy routing ${DEPLOYMENT_REFERENCE}" \
+              --query 'Command.CommandId' \
+              --output text
+          )"
+
+          echo "command_id=${COMMAND_ID}" >> "$GITHUB_OUTPUT"
+
+          aws ssm wait command-executed \
+            --region "${{ vars.AWS_REGION }}" \
+            --command-id "${COMMAND_ID}" \
+            --instance-id "${INSTANCE_ID}"
+
+          STATUS="$(
+            aws ssm get-command-invocation \
+              --region "${{ vars.AWS_REGION }}" \
+              --command-id "${COMMAND_ID}" \
+              --instance-id "${INSTANCE_ID}" \
+              --query 'Status' \
+              --output text
+          )"
+
+          echo "SSM command status: ${STATUS}"
+          test "${STATUS}" = "Success"
+
       - name: Publish summary
+        if: always()
         shell: bash
         run: |
-          echo "## Production Release Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Version: \`${{ steps.image.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Commit: \`${{ steps.image.outputs.full_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Release tag: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.image.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Immutable SHA tag: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.image.outputs.sha_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Digest: \`${{ steps.build.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Deployment reference: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}@${{ steps.build.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Production Release Summary"
+            echo
+            echo "- Version: \`${{ steps.image.outputs.version }}\`"
+            echo "- Commit: \`${{ steps.image.outputs.full_sha }}\`"
+            echo "- Release tag: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.image.outputs.version }}\`"
+            echo "- Immutable SHA tag: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.image.outputs.sha_tag }}\`"
+            echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
+            echo "- Deployment reference: \`${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}@${{ steps.build.outputs.digest }}\`"
+            echo "- SSM command id: \`${{ steps.deploy.outputs.command_id }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
