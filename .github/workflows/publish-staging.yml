@@ -117,7 +117,6 @@ jobs:
           sbom: false
           tags: |
             ${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:staging
-            ${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.image.outputs.sha_tag }}
           build-args: |
             VERSION=staging
             BUILD_DATE=${{ steps.image.outputs.build_date }}

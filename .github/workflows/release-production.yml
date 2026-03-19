@@ -136,7 +136,6 @@ jobs:
           platforms: linux/amd64
           tags: |
             ${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.image.outputs.version }}
-            ${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.image.outputs.sha_tag }}
           build-args: |
             VERSION=${{ steps.image.outputs.version }}
             BUILD_DATE=${{ steps.image.outputs.build_date }}
