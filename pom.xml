@@ -37,7 +37,6 @@
     <mapstruct.version>1.6.3</mapstruct.version>
     <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
     <netty.version>4.2.10.Final</netty.version>
-    <openapi.version>3.0.2</openapi.version>
     <spotbugs.plugin.version>4.9.8.2</spotbugs.plugin.version>
     <spotless.plugin.version>3.3.0</spotless.plugin.version>
     <spring-cloud.version>2025.1.1</spring-cloud.version>

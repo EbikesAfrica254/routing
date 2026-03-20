@@ -164,6 +164,7 @@ jobs:
         env:
           DEPLOYMENT_REFERENCE: ${{ vars.ECR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}@${{ steps.build.outputs.digest }}
           INSTANCE_ID: ${{ vars.DEPLOY_INSTANCE_ID }}
+          SHORT_SHA: ${{ steps.image.outputs.short_sha }}
         run: |
           set -Eeuo pipefail
 
@@ -175,7 +176,7 @@ jobs:
               --region "${{ vars.AWS_REGION }}" \
               --instance-ids "${INSTANCE_ID}" \
               --document-name "AWS-RunShellScript" \
-              --comment "Deploy routing ${DEPLOYMENT_REFERENCE}" \
+              --comment "Deploy routing sha-${SHORT_SHA}" \
               --parameters commands="/usr/local/bin/deploy-application.sh deploy routing ${DEPLOYMENT_REFERENCE}" \
               --query 'Command.CommandId' \
               --output text
