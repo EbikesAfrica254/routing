@@ -38,6 +38,7 @@ routing:
 security:
   public-endpoints:
     - /actuator/health
+    - /actuator/prometheus
   scopes:
     - email
     - openid
