@@ -66,6 +66,8 @@ A committed `PricingQuote` is a prerequisite for an order entering `PENDING_ASSI
 
 ## First-Time Setup
 
+For secrets handling and upstream model, see [secrets](./documentation/SECRETS.md)
+
 ```bash
 # 1. Copy environment template and configure
 cp .env.example .env
